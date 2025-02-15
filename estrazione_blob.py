@@ -65,9 +65,14 @@ def process_image(image):
             cropped_blob = img_np[ny:ny+nh, nx:nx+nw]
 
             # **🔹 Correzione: Convertire in immagine PIL RGB**
-            blob_pil = Image.fromarray(cropped_blob).convert("RGB")  # Conversione forzata
+            blob_pil = Image.fromarray(cropped_blob).convert("RGB")
 
-            blob_images.append(blob_pil)
+            # **🔹 Nuova correzione: Convertire PIL Image in PNG Bytes prima di visualizzarla**
+            buf = io.BytesIO()
+            blob_pil.save(buf, format="PNG")
+            byte_im = buf.getvalue()
+
+            blob_images.append(byte_im)
 
     # Mostrare i blob ritagliati in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
@@ -75,4 +80,4 @@ def process_image(image):
 
     for i, blob_img in enumerate(blob_images):
         with cols[i % 5]:  # Distribuisce le immagini nelle 5 colonne
-            st.image(blob_img, caption=f"Blob {i+1}", use_container_width=True)
+            st.image(blob_img, caption=f"Blob {i+1}", use_container_width=True, output_format="PNG")
