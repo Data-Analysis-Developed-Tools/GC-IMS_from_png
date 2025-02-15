@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_cropper import st_cropper
-import data_loader  # Importa il modulo per il caricamento dell'immagine
+from modules import data_loader  # Se il file è in una cartella "modules"
+from components import data_loader  # Se il file è in una cartella "modules"
 import estrazione_blob  # Importa il modulo di elaborazione
 
 # Titolo dell'app
