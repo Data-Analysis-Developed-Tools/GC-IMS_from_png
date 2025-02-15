@@ -5,40 +5,52 @@ from PIL import Image
 import streamlit as st
 
 def is_monotonic_gradient(region):
-    """Verifica se un blob ha un unico massimo di intensità."""
+    """
+    Controlla se il gradiente cromatico è monotono, ovvero se l'intensità decresce 
+    allontanandosi dal massimo centrale in tutte le direzioni.
+    """
     min_val, max_val, _, max_loc = cv2.minMaxLoc(region)
-    return (region == max_val).sum() == 1
+    x_max, y_max = max_loc  # Coordinate del massimo cromatico
 
-def adjust_bounding_box(x, y, w, h, x_max, y_max, img_shape):
-    """Riposiziona il bounding box per centrare il massimo cromatico nella zona centrale."""
-    H, W = img_shape  # Altezza e larghezza dell'immagine
+    # Convertiamo l'immagine in float per calcolare i gradienti
+    region = region.astype(np.float32)
 
-    # Calcola i quintili centrali
-    x_quintile = (w // 5)  
-    y_quintile = (h // 5)
+    # Estrai i gradienti lungo x e y
+    grad_x = np.diff(region, axis=1)  # Differenze tra colonne
+    grad_y = np.diff(region, axis=0)  # Differenze tra righe
 
-    x_start, x_end = x, x + w
-    y_start, y_end = y, y + h
+    # Verifica che il gradiente sia negativo (decrescente) allontanandosi dal massimo
+    left = np.all(grad_x[:, :x_max] <= 0)  # Sinistra
+    right = np.all(grad_x[:, x_max:] >= 0)  # Destra
+    top = np.all(grad_y[:y_max, :] <= 0)  # Sopra
+    bottom = np.all(grad_y[y_max:, :] >= 0)  # Sotto
 
-    # Controlla se il massimo è troppo vicino ai bordi
-    if x_max < x + x_quintile:
-        x_start = max(0, x_max - x_quintile)
-        x_end = min(W, x_start + w)
-    elif x_max > x + (4 * x_quintile):
-        x_end = min(W, x_max + x_quintile)
-        x_start = max(0, x_end - w)
+    return left and right and top and bottom  # Deve essere vero per tutte le direzioni
 
-    if y_max < y + y_quintile:
-        y_start = max(0, y_max - y_quintile)
-        y_end = min(H, y_start + h)
-    elif y_max > y + (4 * y_quintile):
-        y_end = min(H, y_max + y_quintile)
-        y_start = max(0, y_end - h)
+def adjust_bounding_box(x, y, w, h, x_max, y_max, img_gray):
+    """
+    Regola il bounding box per assicurarsi che il massimo cromatico sia centrato e
+    che il gradiente sia monotono decrescente rispetto al massimo.
+    """
+    H, W = img_gray.shape  # Dimensioni totali dell'immagine
 
-    return x_start, y_start, x_end - x_start, y_end - y_start
+    # Espansione massima consentita
+    max_expand = 10  # Pixel di espansione per migliorare il centraggio
+    for _ in range(max_expand):
+        roi = img_gray[y:y+h, x:x+w]
+        if is_monotonic_gradient(roi):
+            return x, y, w, h  # Bounding box già ottimale
+
+        # Se il gradiente non è valido, espandi la finestra di 1 pixel in ogni direzione (se possibile)
+        if x > 0: x -= 1
+        if y > 0: y -= 1
+        if x + w < W: w += 1
+        if y + h < H: h += 1
+
+    return x, y, w, h  # Restituisce il riquadro corretto o il migliore ottenibile
 
 def process_image(image):
-    """Elabora l'immagine ritagliata per individuare i blob e visualizzarli in una gallery con centratura migliorata."""
+    """Elabora l'immagine ritagliata per individuare i blob e visualizzarli in una gallery ottimizzata."""
     img_np = np.array(image.convert("RGB"))
     img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
@@ -61,23 +73,12 @@ def process_image(image):
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(img_gray[y:y+h, x:x+w])
         x_max, y_max = x + max_loc[0], y + max_loc[1]
 
-        # Riposiziona il bounding box se necessario
-        x, y, w, h = adjust_bounding_box(x, y, w, h, x_max, y_max, img_gray.shape)
-
+        # Regola il bounding box per ottimizzare il centraggio e il gradiente cromatico
+        x, y, w, h = adjust_bounding_box(x, y, w, h, x_max, y_max, img_gray)
         cropped_blob = img_np[y:y+h, x:x+w]
 
-        # Verifica se il blob ha un unico massimo o un gradiente monotono
-        if is_monotonic_gradient(img_gray[y:y+h, x:x+w]):
-            blob_pil = Image.fromarray(cropped_blob)
-            blob_images.append(blob_pil)
-        else:
-            # Se il gradiente non è monotono, suddividere in due parti
-            half_h = h // 2
-            sub_regions = [(y, y+half_h), (y+half_h, y+h)]
-            for sub_y_start, sub_y_end in sub_regions:
-                cropped_sub_blob = img_np[sub_y_start:sub_y_end, x:x+w]
-                blob_pil = Image.fromarray(cropped_sub_blob)
-                blob_images.append(blob_pil)
+        blob_pil = Image.fromarray(cropped_blob)
+        blob_images.append(blob_pil)
 
     # Mostrare i blob ritagliati in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
