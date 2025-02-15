@@ -20,7 +20,7 @@ def find_maxima(image_gray, threshold_factor, neighborhood_size):
     Identifica i punti di massimo cromatico con maggiore sensibilità.
     """
     blurred = cv2.GaussianBlur(image_gray, (3, 3), 0)
-    min_val, max_val, _, _ = cv2.minMaxLoc(blurred)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(blurred)
     threshold = max_val * threshold_factor
     maxima_mask = (blurred >= threshold).astype(np.uint8) * 255
 
@@ -58,12 +58,14 @@ def apply_watershed(image_gray, opening_iter):
 def extract_blobs(image, markers, maxima_map):
     """
     Estrae i blob segmentati e applica la colormap 'Parula' per uniformità.
+    Registra anche le coordinate del massimo cromatico di ogni blob.
     """
     img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
     img_colored = apply_colormap_parula(img_np)  # Applichiamo la colormap Parula
     
     blobs = []
     positions = []
+    maxima_coords = []
     for label_id in np.unique(markers):
         if label_id <= 0:
             continue
@@ -71,35 +73,38 @@ def extract_blobs(image, markers, maxima_map):
         mask = (markers == label_id).astype(np.uint8) * 255
         x, y, w, h = cv2.boundingRect(mask)
 
+        # Trova la posizione del massimo cromatico all'interno del blob
         subregion = maxima_map[y:y+h, x:x+w]
-        num_maxima = len(np.unique(subregion)) - 1
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(subregion)
 
-        if num_maxima == 1:
-            cropped_blob = img_colored[y:y+h, x:x+w]
+        # Converti le coordinate del massimo nel sistema dell'immagine originale
+        max_x_global = x + max_loc[0]
+        max_y_global = y + max_loc[1]
 
-            blob_pil = Image.fromarray(cropped_blob)
+        cropped_blob = img_colored[y:y+h, x:x+w]
 
-            buf = io.BytesIO()
-            blob_pil.save(buf, format="PNG")
-            byte_im = buf.getvalue()
+        blob_pil = Image.fromarray(cropped_blob)
 
-            blobs.append(byte_im)
-            positions.append((x + w // 2, y + h // 2))  # Centro del blob per la numerazione
+        buf = io.BytesIO()
+        blob_pil.save(buf, format="PNG")
+        byte_im = buf.getvalue()
+
+        blobs.append((byte_im, (max_x_global, max_y_global)))  # Salva blob + coordinate globali
+        positions.append((x + w // 2, y + h // 2))  # Centro del blob per la numerazione
 
     return blobs, positions
 
 def draw_blob_numbers(image, positions):
     """
-    Disegna il numero di ogni blob **dopo** il ritaglio e l'adattamento della colormap.
+    Disegna il numero di ogni blob sopra l'immagine ritagliata **dopo** il crop.
     """
     image_pil = Image.fromarray(image)
     draw = ImageDraw.Draw(image_pil)
 
-    # Se disponibile, usa un font di sistema
     try:
-        font = ImageFont.truetype("arial.ttf", 12)  # **Font più piccolo e più definito**
+        font = ImageFont.truetype("arial.ttf", 10)  # **Font piccolo e più definito**
     except IOError:
-        font = ImageFont.load_default()  # Se Arial non è disponibile, usa il default
+        font = ImageFont.load_default()
 
     for i, (x, y) in enumerate(positions):
         draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=1, font=font, anchor="mm")
@@ -126,7 +131,7 @@ def process_image(image):
     # 2️⃣ Applica Watershed per segmentare i blob
     markers = apply_watershed(img_np, opening_iter)
 
-    # 3️⃣ Estrae i blob e memorizza le loro posizioni per numerazione
+    # 3️⃣ Estrae i blob e registra le loro coordinate massime
     blob_images, positions = extract_blobs(image, markers, maxima_map)
 
     # 4️⃣ Disegna i numeri solo **dopo** il ritaglio e l'adattamento alla colormap
@@ -136,10 +141,10 @@ def process_image(image):
     st.subheader("Immagine Segmentata con Parula e Numerazione Blob")
     st.image(img_annotated, use_container_width=True, caption="Immagine con Blob Numerati")
 
-    # Mostrare i blob in una griglia a 5 colonne
+    # Mostrare i blob in una griglia a 5 colonne con coordinate massime
     st.subheader("Galleria di Blob Identificati")
     cols = st.columns(5)
 
-    for i, blob_img in enumerate(blob_images):
+    for i, (blob_img, (max_x, max_y)) in enumerate(blob_images):
         with cols[i % 5]:
-            st.image(blob_img, caption=f"Blob {i+1}", use_container_width=True, output_format="PNG")
+            st.image(blob_img, caption=f"Blob {i+1}\nMax: ({max_x}, {max_y})", use_container_width=True, output_format="PNG")
