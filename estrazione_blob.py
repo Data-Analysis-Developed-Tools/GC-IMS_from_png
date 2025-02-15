@@ -90,15 +90,19 @@ def extract_blobs(image, markers, maxima_map):
 
 def draw_blob_numbers(image, positions):
     """
-    Disegna il numero di ogni blob sopra l'immagine ritagliata con numeri molto piccoli.
+    Disegna il numero di ogni blob **dopo** il ritaglio e l'adattamento della colormap.
     """
     image_pil = Image.fromarray(image)
     draw = ImageDraw.Draw(image_pil)
 
-    font_size = 6  # **Ridotto a circa 1/5 delle dimensioni originali**
-    
+    # Se disponibile, usa un font di sistema
+    try:
+        font = ImageFont.truetype("arial.ttf", 12)  # **Font più piccolo e più definito**
+    except IOError:
+        font = ImageFont.load_default()  # Se Arial non è disponibile, usa il default
+
     for i, (x, y) in enumerate(positions):
-        draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=1, anchor="mm")
+        draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=1, font=font, anchor="mm")
 
     return image_pil
 
@@ -125,7 +129,7 @@ def process_image(image):
     # 3️⃣ Estrae i blob e memorizza le loro posizioni per numerazione
     blob_images, positions = extract_blobs(image, markers, maxima_map)
 
-    # 4️⃣ Disegna i numeri sui blob dell'immagine ritagliata
+    # 4️⃣ Disegna i numeri solo **dopo** il ritaglio e l'adattamento alla colormap
     img_annotated = draw_blob_numbers(img_colored, positions)
 
     # Mostrare l'immagine segmentata con la mappa cromatica e numeri
