@@ -5,15 +5,15 @@ from PIL import Image
 import streamlit as st
 from scipy.ndimage import label
 
-def find_maxima(image_gray):
+def find_maxima(image_gray, threshold_factor):
     """
     Identifica i punti di massimo cromatico su tutta l'immagine.
-    Restituisce una maschera con i massimi.
+    threshold_factor: fattore di regolazione tra 0.5 e 1.0 per trovare i massimi.
     """
     min_val, max_val, _, _ = cv2.minMaxLoc(image_gray)
 
-    # Soglia per trovare i massimi: consideriamo i pixel molto vicini al massimo globale
-    threshold = max_val * 0.95  # Adatta la soglia per evitare noise
+    # Soglia regolabile per individuare i massimi
+    threshold = max_val * threshold_factor
     maxima_mask = (image_gray >= threshold).astype(np.uint8) * 255
 
     # Etichettare i massimi
@@ -21,16 +21,17 @@ def find_maxima(image_gray):
 
     return labeled_maxima, num_features
 
-def apply_watershed(image_gray):
+def apply_watershed(image_gray, opening_iter):
     """
     Utilizza Watershed per segmentare i blob prima di estrarli.
+    opening_iter: numero di iterazioni di apertura morfologica per migliorare la separazione.
     """
     # Converti in formato adatto per Watershed
     ret, thresh = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Rimuove il rumore
-    kernel = np.ones((3,3), np.uint8)
-    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+    # Rimuove il rumore con apertura morfologica regolabile
+    kernel = np.ones((3, 3), np.uint8)
+    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=opening_iter)
 
     # Trova lo sfondo certo
     sure_bg = cv2.dilate(opening, kernel, iterations=3)
@@ -97,11 +98,17 @@ def process_image(image):
     img_np = np.array(image.convert("RGB"))
     img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-    # 1️⃣ Identifica i massimi su tutta l'immagine
-    maxima_map, _ = find_maxima(img_gray)
+    # 🔹 Cursore per la soglia dei massimi cromatici
+    threshold_factor = st.sidebar.slider("Sensibilità ai massimi cromatici", 0.5, 1.0, 0.95)
 
-    # 2️⃣ Applica Watershed per segmentare i blob
-    markers = apply_watershed(img_gray)
+    # 🔹 Cursore per iterazioni di apertura morfologica (migliora Watershed)
+    opening_iter = st.sidebar.slider("Separazione blob (iterazioni apertura)", 1, 5, 2)
+
+    # 1️⃣ Identifica i massimi su tutta l'immagine con il parametro regolabile
+    maxima_map, _ = find_maxima(img_gray, threshold_factor)
+
+    # 2️⃣ Applica Watershed per segmentare i blob con il parametro regolabile
+    markers = apply_watershed(img_gray, opening_iter)
 
     # 3️⃣ Estrae i blob assicurandosi che abbiano un solo massimo
     blob_images = extract_blobs(image, markers, maxima_map)
