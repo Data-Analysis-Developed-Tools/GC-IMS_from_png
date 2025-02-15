@@ -5,10 +5,7 @@ from PIL import Image
 import streamlit as st
 
 def find_multiple_maxima(region, threshold=5):
-    """
-    Trova tutti i massimi locali nell'immagine e restituisce le loro coordinate.
-    threshold: distanza minima tra i massimi per considerarli distinti.
-    """
+    """Trova tutti i massimi locali nell'immagine e restituisce le loro coordinate."""
     min_val, max_val, _, _ = cv2.minMaxLoc(region)
     
     # Trova tutti i punti con valore vicino al massimo
@@ -21,27 +18,21 @@ def find_multiple_maxima(region, threshold=5):
     
     return maxima_points if len(maxima_points) > 1 else None
 
-def split_blob(x, y, w, h, maxima, img_np):
-    """
-    Divide il blob in due sotto-blob in base alla posizione dei massimi.
-    Se i massimi sono più distanziati in verticale, divide orizzontalmente.
-    Se sono più distanziati in orizzontale, divide verticalmente.
-    """
+def split_blob(x, y, w, h, maxima):
+    """Divide il blob in due sotto-blob in base alla posizione dei massimi."""
     x_max1, y_max1 = maxima[0]
     x_max2, y_max2 = maxima[1]
 
     if abs(x_max1 - x_max2) > abs(y_max1 - y_max2):
-        # Divide verticalmente
         x_mid = (x_max1 + x_max2) // 2
         return [(x, y, x_mid - x, h), (x_mid, y, x + w - x_mid, h)]
     else:
-        # Divide orizzontalmente
         y_mid = (y_max1 + y_max2) // 2
         return [(x, y, w, y_mid - y), (x, y_mid, w, y + h - y_mid)]
 
 def process_image(image):
     """Elabora l'immagine ritagliata per individuare i blob e visualizzarli in una gallery ottimizzata."""
-    img_np = np.array(image.convert("RGB"))
+    img_np = np.array(image.convert("RGB"))  # Convertiamo l'immagine in RGB
     img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
     # Cursore per la soglia cromatica
@@ -66,16 +57,16 @@ def process_image(image):
         maxima = find_multiple_maxima(region)
 
         if maxima and len(maxima) > 1:
-            # Se ci sono due massimi, suddividi il blob in due
-            new_bounding_boxes = split_blob(x, y, w, h, maxima, img_np)
+            new_bounding_boxes = split_blob(x, y, w, h, maxima)
         else:
-            # Se c'è un solo massimo, mantieni il bounding box attuale
             new_bounding_boxes = [(x, y, w, h)]
 
-        # Aggiungi i blob segmentati alla lista finale
         for (nx, ny, nw, nh) in new_bounding_boxes:
             cropped_blob = img_np[ny:ny+nh, nx:nx+nw]
-            blob_pil = Image.fromarray(cropped_blob)
+
+            # **🔹 Correzione: Convertire in immagine PIL RGB**
+            blob_pil = Image.fromarray(cropped_blob).convert("RGB")  # Conversione forzata
+
             blob_images.append(blob_pil)
 
     # Mostrare i blob ritagliati in una griglia a 5 colonne
