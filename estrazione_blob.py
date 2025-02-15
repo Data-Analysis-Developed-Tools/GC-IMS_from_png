@@ -7,9 +7,9 @@ from scipy.ndimage import label
 
 def apply_colormap(image_gray):
     """
-    Applica la mappa cromatica 'Inferno' all'immagine in scala di grigi.
+    Applica la mappa cromatica 'Turbo' all'immagine in scala di grigi.
     """
-    image_color = cv2.applyColorMap(image_gray, cv2.COLORMAP_INFERNO)
+    image_color = cv2.applyColorMap(image_gray, cv2.COLORMAP_TURBO)
     return image_color
 
 def find_maxima(image_gray, threshold_factor, neighborhood_size):
@@ -54,10 +54,10 @@ def apply_watershed(image_gray, opening_iter):
 
 def extract_blobs(image, markers, maxima_map):
     """
-    Estrae i blob segmentati e applica la colormap 'Inferno' per uniformità.
+    Estrae i blob segmentati e applica la colormap 'Turbo' per uniformità.
     """
     img_np = np.array(image.convert("L"))  # Convertiamo l'immagine PIL in scala di grigi
-    img_colored = apply_colormap(img_np)  # Applichiamo la colormap Inferno
+    img_colored = apply_colormap(img_np)  # Applichiamo la colormap Turbo
     
     blobs = []
     for label_id in np.unique(markers):
@@ -84,9 +84,9 @@ def extract_blobs(image, markers, maxima_map):
     return blobs
 
 def process_image(image):
-    """Segmenta l'immagine e applica la mappa cromatica 'Inferno' ai blob estratti."""
+    """Segmenta l'immagine e applica la mappa cromatica 'Turbo' ai blob estratti."""
     img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
-    img_colored = apply_colormap(img_np)   # Applichiamo la colormap "Inferno"
+    img_colored = apply_colormap(img_np)   # Applichiamo la colormap "Turbo"
 
     # 🔹 Cursore per la sensibilità dei massimi cromatici
     threshold_factor = st.sidebar.slider("Sensibilità ai massimi cromatici", 0.7, 1.0, 0.90, step=0.01)
@@ -103,12 +103,12 @@ def process_image(image):
     # 2️⃣ Applica Watershed per segmentare i blob
     markers = apply_watershed(img_np, opening_iter)
 
-    # 3️⃣ Estrae i blob e applica la colormap 'Inferno'
+    # 3️⃣ Estrae i blob e applica la colormap 'Turbo'
     blob_images = extract_blobs(image, markers, maxima_map)
 
     # Mostrare l'immagine segmentata con la mappa cromatica
-    st.subheader("Immagine Segmentata con Inferno")
-    st.image(img_colored, use_container_width=True, caption="Immagine con Mappa Cromatica Inferno")
+    st.subheader("Immagine Segmentata con Turbo")
+    st.image(img_colored, use_container_width=True, caption="Immagine con Mappa Cromatica Turbo")
 
     # Mostrare i blob in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
