@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import io
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
 from scipy.ndimage import label
 import matplotlib.pyplot as plt
@@ -63,6 +63,7 @@ def extract_blobs(image, markers, maxima_map):
     img_colored = apply_colormap_parula(img_np)  # Applichiamo la colormap Parula
     
     blobs = []
+    positions = []
     for label_id in np.unique(markers):
         if label_id <= 0:
             continue
@@ -83,8 +84,21 @@ def extract_blobs(image, markers, maxima_map):
             byte_im = buf.getvalue()
 
             blobs.append(byte_im)
+            positions.append((x + w // 2, y + h // 2))  # Centro del blob per la numerazione
 
-    return blobs
+    return blobs, positions
+
+def draw_blob_numbers(image, positions):
+    """
+    Disegna il numero di ogni blob sopra l'immagine ritagliata.
+    """
+    image_pil = Image.fromarray(image)
+    draw = ImageDraw.Draw(image_pil)
+
+    for i, (x, y) in enumerate(positions):
+        draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=2)
+
+    return image_pil
 
 def process_image(image):
     """Segmenta l'immagine e applica la mappa cromatica 'Parula' ai blob estratti."""
@@ -106,12 +120,15 @@ def process_image(image):
     # 2️⃣ Applica Watershed per segmentare i blob
     markers = apply_watershed(img_np, opening_iter)
 
-    # 3️⃣ Estrae i blob e applica la colormap 'Parula'
-    blob_images = extract_blobs(image, markers, maxima_map)
+    # 3️⃣ Estrae i blob e memorizza le loro posizioni per numerazione
+    blob_images, positions = extract_blobs(image, markers, maxima_map)
 
-    # Mostrare l'immagine segmentata con la mappa cromatica
-    st.subheader("Immagine Segmentata con Parula")
-    st.image(img_colored, use_container_width=True, caption="Immagine con Mappa Cromatica Parula")
+    # 4️⃣ Disegna i numeri sui blob dell'immagine ritagliata
+    img_annotated = draw_blob_numbers(img_colored, positions)
+
+    # Mostrare l'immagine segmentata con la mappa cromatica e numeri
+    st.subheader("Immagine Segmentata con Parula e Numerazione Blob")
+    st.image(img_annotated, use_container_width=True, caption="Immagine con Blob Numerati")
 
     # Mostrare i blob in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
