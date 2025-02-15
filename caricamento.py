@@ -1,18 +1,15 @@
 import streamlit as st
-from PIL import Image
 from streamlit_cropper import st_cropper
-import estrazione_blob  # Importa il modulo esterno
+import data_loader  # Importa il modulo per il caricamento dell'immagine
+import estrazione_blob  # Importa il modulo di elaborazione
 
 # Titolo dell'app
 st.title("Segmentazione delle Macchie in Immagini GC-IMS")
 
-# Caricamento immagine
-uploaded_file = st.file_uploader("Carica un'immagine (.png)", type=["png"])
+# Caricare l'immagine usando il modulo data_loader
+image = data_loader.load_image()
 
-if uploaded_file:
-    # Apertura dell'immagine con PIL
-    image = Image.open(uploaded_file)
-    
+if image:
     # Interfaccia di cropping manuale
     st.subheader("Seleziona l'area da ritagliare")
     cropped_image = st_cropper(image, box_color='red', aspect_ratio=None)
