@@ -64,10 +64,14 @@ def process_image(image):
         for (nx, ny, nw, nh) in new_bounding_boxes:
             cropped_blob = img_np[ny:ny+nh, nx:nx+nw]
 
-            # **🔹 Correzione: Convertire in immagine PIL RGB**
-            blob_pil = Image.fromarray(cropped_blob).convert("RGB")
+            # **🔹 Correzione: Assicurarsi che l'immagine sia sempre a 3 canali RGB**
+            if len(cropped_blob.shape) == 2:  # Se è in scala di grigi
+                cropped_blob = cv2.cvtColor(cropped_blob, cv2.COLOR_GRAY2RGB)
 
-            # **🔹 Nuova correzione: Convertire PIL Image in PNG Bytes prima di visualizzarla**
+            # **🔹 Creare un'immagine PIL compatibile**
+            blob_pil = Image.fromarray(cropped_blob, mode="RGB")
+
+            # **🔹 Convertire PIL Image in PNG Bytes prima di visualizzarla**
             buf = io.BytesIO()
             blob_pil.save(buf, format="PNG")
             byte_im = buf.getvalue()
