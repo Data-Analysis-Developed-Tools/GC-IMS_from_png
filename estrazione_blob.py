@@ -68,6 +68,10 @@ def process_image(image):
             if len(cropped_blob.shape) == 2:  # Se è in scala di grigi
                 cropped_blob = cv2.cvtColor(cropped_blob, cv2.COLOR_GRAY2RGB)
 
+            # **🔹 Correzione: Convertire cropped_blob in uint8 per compatibilità con PIL**
+            if cropped_blob.dtype != np.uint8:
+                cropped_blob = (cropped_blob * 255).astype(np.uint8)
+
             # **🔹 Creare un'immagine PIL compatibile**
             blob_pil = Image.fromarray(cropped_blob, mode="RGB")
 
