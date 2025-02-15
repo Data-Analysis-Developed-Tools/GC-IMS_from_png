@@ -4,12 +4,15 @@ import io
 from PIL import Image
 import streamlit as st
 from scipy.ndimage import label
+import matplotlib.pyplot as plt
 
-def apply_colormap_jet(image_gray):
+def apply_colormap_parula(image_gray):
     """
-    Applica la mappa cromatica 'Jet' all'immagine in scala di grigi.
+    Applica la mappa cromatica 'Parula' all'immagine in scala di grigi.
     """
-    image_color = cv2.applyColorMap(image_gray, cv2.COLORMAP_JET)
+    parula_cmap = plt.get_cmap("cividis")  # Parula non è direttamente in OpenCV, ma "cividis" è molto simile
+    normalized_gray = image_gray / 255.0  # Normalizziamo i valori tra 0 e 1
+    image_color = (parula_cmap(normalized_gray)[:, :, :3] * 255).astype(np.uint8)
     return image_color
 
 def find_maxima(image_gray, threshold_factor, neighborhood_size):
@@ -54,10 +57,10 @@ def apply_watershed(image_gray, opening_iter):
 
 def extract_blobs(image, markers, maxima_map):
     """
-    Estrae i blob segmentati e applica la colormap 'Jet' per uniformità.
+    Estrae i blob segmentati e applica la colormap 'Parula' per uniformità.
     """
     img_np = np.array(image.convert("L"))  # Convertiamo l'immagine PIL in scala di grigi
-    img_colored = apply_colormap_jet(img_np)  # Applichiamo la colormap Jet
+    img_colored = apply_colormap_parula(img_np)  # Applichiamo la colormap Parula
     
     blobs = []
     for label_id in np.unique(markers):
@@ -84,9 +87,9 @@ def extract_blobs(image, markers, maxima_map):
     return blobs
 
 def process_image(image):
-    """Segmenta l'immagine e applica la mappa cromatica 'Jet' ai blob estratti."""
+    """Segmenta l'immagine e applica la mappa cromatica 'Parula' ai blob estratti."""
     img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
-    img_colored = apply_colormap_jet(img_np)   # Applichiamo la colormap "Jet"
+    img_colored = apply_colormap_parula(img_np)   # Applichiamo la colormap "Parula"
 
     # 🔹 Cursore per la sensibilità dei massimi cromatici
     threshold_factor = st.sidebar.slider("Sensibilità ai massimi cromatici", 0.7, 1.0, 0.90, step=0.01)
@@ -103,12 +106,12 @@ def process_image(image):
     # 2️⃣ Applica Watershed per segmentare i blob
     markers = apply_watershed(img_np, opening_iter)
 
-    # 3️⃣ Estrae i blob e applica la colormap 'Jet'
+    # 3️⃣ Estrae i blob e applica la colormap 'Parula'
     blob_images = extract_blobs(image, markers, maxima_map)
 
     # Mostrare l'immagine segmentata con la mappa cromatica
-    st.subheader("Immagine Segmentata con Jet")
-    st.image(img_colored, use_container_width=True, caption="Immagine con Mappa Cromatica Jet")
+    st.subheader("Immagine Segmentata con Parula")
+    st.image(img_colored, use_container_width=True, caption="Immagine con Mappa Cromatica Parula")
 
     # Mostrare i blob in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
