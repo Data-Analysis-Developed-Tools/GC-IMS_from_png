@@ -3,91 +3,108 @@ import numpy as np
 import io
 from PIL import Image
 import streamlit as st
+from scipy.ndimage import label
 
-def find_maxima(region, threshold=5):
+def find_maxima(image_gray):
     """
-    Trova tutti i massimi locali nell'immagine e restituisce le loro coordinate.
-    threshold: differenza minima dal massimo globale per considerare un massimo.
+    Identifica i punti di massimo cromatico su tutta l'immagine.
+    Restituisce una maschera con i massimi.
     """
-    min_val, max_val, _, _ = cv2.minMaxLoc(region)
-    
-    # Trova tutti i punti con valore vicino al massimo globale
-    max_mask = (region >= max_val - threshold).astype(np.uint8) * 255
+    min_val, max_val, _, _ = cv2.minMaxLoc(image_gray)
 
-    # Trova i contorni dei punti di massimo
-    contours, _ = cv2.findContours(max_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    maxima_points = [cv2.minMaxLoc(region[y:y+1, x:x+1])[3] for c in contours for x, y in c[:, 0]]
-    
-    return maxima_points if len(maxima_points) > 1 else None
+    # Soglia per trovare i massimi: consideriamo i pixel molto vicini al massimo globale
+    threshold = max_val * 0.95  # Adatta la soglia per evitare noise
+    maxima_mask = (image_gray >= threshold).astype(np.uint8) * 255
 
-def split_blob(x, y, w, h, maxima):
+    # Etichettare i massimi
+    labeled_maxima, num_features = label(maxima_mask)
+
+    return labeled_maxima, num_features
+
+def apply_watershed(image_gray):
     """
-    Divide il blob in due sotto-blob in base alla posizione dei massimi.
-    Se i massimi sono più distanziati in verticale, divide orizzontalmente.
-    Se sono più distanziati in orizzontale, divide verticalmente.
+    Utilizza Watershed per segmentare i blob prima di estrarli.
     """
-    x_max1, y_max1 = maxima[0]
-    x_max2, y_max2 = maxima[1]
+    # Converti in formato adatto per Watershed
+    ret, thresh = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    if abs(x_max1 - x_max2) > abs(y_max1 - y_max2):
-        x_mid = (x_max1 + x_max2) // 2
-        return [(x, y, x_mid - x, h), (x_mid, y, x + w - x_mid, h)]
-    else:
-        y_mid = (y_max1 + y_max2) // 2
-        return [(x, y, w, y_mid - y), (x, y_mid, w, y + h - y_mid)]
+    # Rimuove il rumore
+    kernel = np.ones((3,3), np.uint8)
+    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
 
-def process_image(image):
-    """Elabora l'immagine ritagliata per individuare i blob e segmentarli iterativamente."""
+    # Trova lo sfondo certo
+    sure_bg = cv2.dilate(opening, kernel, iterations=3)
+
+    # Trova il primo piano certo
+    dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
+    _, sure_fg = cv2.threshold(dist_transform, 0.5 * dist_transform.max(), 255, 0)
+
+    # Trova regioni incerte
+    sure_fg = np.uint8(sure_fg)
+    unknown = cv2.subtract(sure_bg, sure_fg)
+
+    # Etichette dei marker
+    _, markers = cv2.connectedComponents(sure_fg)
+    markers = markers + 1
+    markers[unknown == 255] = 0
+
+    # Applica Watershed
+    markers = cv2.watershed(cv2.cvtColor(image_gray, cv2.COLOR_GRAY2BGR), markers)
+
+    return markers
+
+def extract_blobs(image, markers, maxima_map):
+    """
+    Estrae i blob segmentati dall'immagine usando Watershed.
+    Garantisce che ogni blob abbia un massimo univoco.
+    """
     img_np = np.array(image.convert("RGB"))
     img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    
+    blobs = []
+    for label_id in np.unique(markers):
+        if label_id <= 0:  # Ignora il background
+            continue
 
-    # Cursore per la soglia cromatica
-    threshold_value = st.slider("Soglia per la segmentazione", 0, 255, 150)
+        # Trova il bounding box del blob
+        mask = (markers == label_id).astype(np.uint8) * 255
+        x, y, w, h = cv2.boundingRect(mask)
 
-    # Applicare un threshold
-    _, thresh = cv2.threshold(img_gray, threshold_value, 255, cv2.THRESH_BINARY)
+        # Controlla se il blob ha un solo massimo nella mappa
+        subregion = maxima_map[y:y+h, x:x+w]
+        num_maxima = len(np.unique(subregion)) - 1  # Rimuove lo sfondo
 
-    # Trovare i contorni
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # Visualizzare l'immagine segmentata
-    st.subheader("Immagine Segmentata")
-    st.image(thresh, use_container_width=True, caption="Macchie Segmentate")
-
-    queue = [(cv2.boundingRect(contour)) for contour in contours]  # Code di elaborazione
-    blob_images = []
-
-    while queue:
-        x, y, w, h = queue.pop(0)  # Estrai il primo riquadro dalla coda
-        region = img_gray[y:y+h, x:x+w]
-
-        # Controlla se ci sono più massimi cromatici
-        maxima = find_maxima(region)
-
-        if maxima and len(maxima) > 1:
-            # Se ci sono due massimi, suddividi il blob in due
-            new_bounding_boxes = split_blob(x, y, w, h, maxima)
-            queue.extend(new_bounding_boxes)  # Aggiungi le nuove regioni alla coda
-        else:
-            # Se c'è un solo massimo, mantieni il bounding box attuale
+        if num_maxima == 1:
             cropped_blob = img_np[y:y+h, x:x+w]
 
-            # Assicurarsi che l'immagine sia sempre in formato RGB e uint8
-            if len(cropped_blob.shape) == 2:
-                cropped_blob = cv2.cvtColor(cropped_blob, cv2.COLOR_GRAY2RGB)
+            # Assicura che sia un'immagine RGB compatibile con PIL
+            cropped_blob = cv2.cvtColor(cropped_blob, cv2.COLOR_BGR2RGB)
 
-            if cropped_blob.dtype != np.uint8:
-                cropped_blob = (cropped_blob * 255).astype(np.uint8)
-
+            # Converte in immagine PIL
             blob_pil = Image.fromarray(cropped_blob, mode="RGB")
 
-            # Convertire PIL Image in PNG Bytes prima di visualizzarla
+            # Converte PIL Image in PNG Bytes
             buf = io.BytesIO()
             blob_pil.save(buf, format="PNG")
             byte_im = buf.getvalue()
 
-            blob_images.append(byte_im)
+            blobs.append(byte_im)
+
+    return blobs
+
+def process_image(image):
+    """Segmenta l'immagine usando Watershed e garantisce un massimo per blob."""
+    img_np = np.array(image.convert("RGB"))
+    img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    # 1️⃣ Identifica i massimi su tutta l'immagine
+    maxima_map, _ = find_maxima(img_gray)
+
+    # 2️⃣ Applica Watershed per segmentare i blob
+    markers = apply_watershed(img_gray)
+
+    # 3️⃣ Estrae i blob assicurandosi che abbiano un solo massimo
+    blob_images = extract_blobs(image, markers, maxima_map)
 
     # Mostrare i blob ritagliati in una griglia a 5 colonne
     st.subheader("Galleria di Blob Identificati")
