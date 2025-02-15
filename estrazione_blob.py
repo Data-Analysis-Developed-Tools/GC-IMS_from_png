@@ -20,7 +20,7 @@ def find_maxima(image_gray, threshold_factor, neighborhood_size):
     Identifica i punti di massimo cromatico con maggiore sensibilità.
     """
     blurred = cv2.GaussianBlur(image_gray, (3, 3), 0)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(blurred)
+    min_val, max_val, _, _ = cv2.minMaxLoc(blurred)
     threshold = max_val * threshold_factor
     maxima_mask = (blurred >= threshold).astype(np.uint8) * 255
 
@@ -55,10 +55,10 @@ def apply_watershed(image_gray, opening_iter):
 
     return markers
 
-def extract_blobs(image, markers, maxima_map):
+def extract_blobs(image, markers, maxima_map, original_size):
     """
     Estrae i blob segmentati e applica la colormap 'Parula' per uniformità.
-    Registra anche le coordinate del massimo cromatico di ogni blob.
+    Registra anche le coordinate del massimo cromatico di ogni blob rispetto all'immagine originale.
     """
     img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
     img_colored = apply_colormap_parula(img_np)  # Applichiamo la colormap Parula
@@ -75,11 +75,17 @@ def extract_blobs(image, markers, maxima_map):
 
         # Trova la posizione del massimo cromatico all'interno del blob
         subregion = maxima_map[y:y+h, x:x+w]
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(subregion)
+        _, _, _, max_loc = cv2.minMaxLoc(subregion)
 
         # Converti le coordinate del massimo nel sistema dell'immagine originale
         max_x_global = x + max_loc[0]
         max_y_global = y + max_loc[1]
+
+        # Riporta le coordinate alla scala dell'immagine originale (pre-crop)
+        scale_x = original_size[0] / img_np.shape[1]
+        scale_y = original_size[1] / img_np.shape[0]
+        max_x_original = int(max_x_global * scale_x)
+        max_y_original = int(max_y_global * scale_y)
 
         cropped_blob = img_colored[y:y+h, x:x+w]
 
@@ -89,20 +95,20 @@ def extract_blobs(image, markers, maxima_map):
         blob_pil.save(buf, format="PNG")
         byte_im = buf.getvalue()
 
-        blobs.append((byte_im, (max_x_global, max_y_global)))  # Salva blob + coordinate globali
-        positions.append((x + w // 2, y + h // 2))  # Centro del blob per la numerazione
+        blobs.append((byte_im, (max_x_original, max_y_original)))  # Salva blob + coordinate globali
+        positions.append((max_x_original, max_y_original))  # Posizione del massimo cromatico
 
     return blobs, positions
 
 def draw_blob_numbers(image, positions):
     """
-    Disegna il numero di ogni blob sopra l'immagine ritagliata **dopo** il crop.
+    Disegna il numero di ogni blob riferito all'immagine originale.
     """
     image_pil = Image.fromarray(image)
     draw = ImageDraw.Draw(image_pil)
 
     try:
-        font = ImageFont.truetype("arial.ttf", 10)  # **Font piccolo e più definito**
+        font = ImageFont.truetype("arial.ttf", 10)  # Font piccolo e più definito
     except IOError:
         font = ImageFont.load_default()
 
@@ -113,6 +119,8 @@ def draw_blob_numbers(image, positions):
 
 def process_image(image):
     """Segmenta l'immagine e applica la mappa cromatica 'Parula' ai blob estratti."""
+    original_size = image.size  # Memorizza la dimensione originale prima del crop
+
     img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
     img_colored = apply_colormap_parula(img_np)   # Applichiamo la colormap "Parula"
 
@@ -131,17 +139,17 @@ def process_image(image):
     # 2️⃣ Applica Watershed per segmentare i blob
     markers = apply_watershed(img_np, opening_iter)
 
-    # 3️⃣ Estrae i blob e registra le loro coordinate massime
-    blob_images, positions = extract_blobs(image, markers, maxima_map)
+    # 3️⃣ Estrae i blob con coordinate rispetto all'immagine originale
+    blob_images, positions = extract_blobs(image, markers, maxima_map, original_size)
 
-    # 4️⃣ Disegna i numeri solo **dopo** il ritaglio e l'adattamento alla colormap
-    img_annotated = draw_blob_numbers(img_colored, positions)
+    # 4️⃣ Disegna i numeri solo **dopo il ritaglio** riferendosi all'immagine originale
+    img_annotated = draw_blob_numbers(np.array(image), positions)
 
-    # Mostrare l'immagine segmentata con la mappa cromatica e numeri
-    st.subheader("Immagine Segmentata con Parula e Numerazione Blob")
-    st.image(img_annotated, use_container_width=True, caption="Immagine con Blob Numerati")
+    # Mostrare l'immagine segmentata con numerazione originale
+    st.subheader("Immagine Originale con Numerazione Blob")
+    st.image(img_annotated, use_container_width=True, caption="Immagine Originale con Blob Numerati")
 
-    # Mostrare i blob in una griglia a 5 colonne con coordinate massime
+    # Mostrare i blob in una galleria con coordinate originali
     st.subheader("Galleria di Blob Identificati")
     cols = st.columns(5)
 
