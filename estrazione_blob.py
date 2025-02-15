@@ -90,12 +90,12 @@ def extract_blobs(image, markers, maxima_map):
 
 def draw_blob_numbers(image, positions):
     """
-    Disegna il numero di ogni blob sopra l'immagine ritagliata con dimensioni più piccole.
+    Disegna il numero di ogni blob sopra l'immagine ritagliata con numeri molto piccoli.
     """
     image_pil = Image.fromarray(image)
     draw = ImageDraw.Draw(image_pil)
 
-    font_size = 10  # **Numero ridotto a 1/3 delle dimensioni precedenti**
+    font_size = 6  # **Ridotto a circa 1/5 delle dimensioni originali**
     
     for i, (x, y) in enumerate(positions):
         draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=1, anchor="mm")
