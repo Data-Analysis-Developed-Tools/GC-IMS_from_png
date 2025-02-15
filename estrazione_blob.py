@@ -10,8 +10,8 @@ def apply_colormap_parula(image_gray):
     """
     Applica la mappa cromatica 'Parula' all'immagine in scala di grigi.
     """
-    parula_cmap = plt.get_cmap("cividis")  # Parula non è direttamente in OpenCV, ma "cividis" è molto simile
-    normalized_gray = image_gray / 255.0  # Normalizziamo i valori tra 0 e 1
+    parula_cmap = plt.get_cmap("cividis")  # "Cividis" è molto simile a "Parula"
+    normalized_gray = image_gray / 255.0  # Normalizziamo tra 0 e 1
     image_color = (parula_cmap(normalized_gray)[:, :, :3] * 255).astype(np.uint8)
     return image_color
 
@@ -59,7 +59,7 @@ def extract_blobs(image, markers, maxima_map):
     """
     Estrae i blob segmentati e applica la colormap 'Parula' per uniformità.
     """
-    img_np = np.array(image.convert("L"))  # Convertiamo l'immagine PIL in scala di grigi
+    img_np = np.array(image.convert("L"))  # Convertiamo in scala di grigi
     img_colored = apply_colormap_parula(img_np)  # Applichiamo la colormap Parula
     
     blobs = []
@@ -90,13 +90,15 @@ def extract_blobs(image, markers, maxima_map):
 
 def draw_blob_numbers(image, positions):
     """
-    Disegna il numero di ogni blob sopra l'immagine ritagliata.
+    Disegna il numero di ogni blob sopra l'immagine ritagliata con dimensioni più piccole.
     """
     image_pil = Image.fromarray(image)
     draw = ImageDraw.Draw(image_pil)
 
+    font_size = 10  # **Numero ridotto a 1/3 delle dimensioni precedenti**
+    
     for i, (x, y) in enumerate(positions):
-        draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=2)
+        draw.text((x, y), str(i + 1), fill="white", stroke_fill="black", stroke_width=1, anchor="mm")
 
     return image_pil
 
