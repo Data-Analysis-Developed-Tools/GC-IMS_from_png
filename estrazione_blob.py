@@ -35,7 +35,7 @@ def adjust_bounding_box(x, y, w, h, x_max, y_max, img_gray):
     H, W = img_gray.shape  # Dimensioni totali dell'immagine
 
     # Espansione massima consentita
-    max_expand = 50  # Pixel di espansione per migliorare il centraggio
+    max_expand = 20  # Pixel di espansione per migliorare il centraggio
     for _ in range(max_expand):
         roi = img_gray[y:y+h, x:x+w]
         if is_monotonic_gradient(roi):
