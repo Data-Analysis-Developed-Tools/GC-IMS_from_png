@@ -25,7 +25,7 @@ def process_image(image):
 
     # Visualizzare l'immagine segmentata
     st.subheader("Immagine Segmentata")
-    st.image(thresh, use_column_width=True, caption="Macchie Segmentate")
+    st.image(thresh, use_container_width=True, caption="Macchie Segmentate")
 
     blob_images = []
     for i, contour in enumerate(contours):
@@ -51,4 +51,4 @@ def process_image(image):
 
     for i, blob_img in enumerate(blob_images):
         with cols[i % 5]:  # Distribuisce le immagini nelle 5 colonne
-            st.image(blob_img, caption=f"Blob {i+1}", use_column_width=True)
+            st.image(blob_img, caption=f"Blob {i+1}", use_container_width=True)
